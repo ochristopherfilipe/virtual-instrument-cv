@@ -1,56 +1,60 @@
-# 🎹 Virtual Instrument CV (Sintetizador de Acordes Gestual)
+# 🎹 Virtual Instrument CV (Gestural Chord Synthesizer)
 
 Um Instrumento Musical sem toque (Touchless) construído inteiramente com **Python, Visão Computacional e Processamento Digital de Sinais (DSP)**. 
-Ele lê o feed de vídeo da sua Webcam através de um HUD Cyberpunk interativo e utiliza reconhecimento isométrico biológico para deduzir **Acordes Musicais e Modulations**, transmitindo os sinais instantaneamente para qualquer Sintetizador de Áudio (GarageBand, Logic, Ableton) via **Portas MIDI Virtuais C++**.
+Ele lê o feed de vídeo da sua Webcam através de um HUD interativo e utiliza reconhecimento isométrico biológico para deduzir Acordes Musicais, transmitindo os sinais instantaneamente para Sintetizadores de Áudio (GarageBand, Logic, Ableton) via **Portas MIDI Virtuais Internas**.
 
-## 🚀 Arquitetura e Engenharia
+---
 
-### 1. Tracking Ósseo & OpenCV
-No núcleo da captura usamos `mediapipe-silicon` (para compatibilidade nativa de Machine Learning com hardware Apple Silicon). O vídeo base da câmera recebe um blend escurecido de sobreposição de wireframes de neon (`src/main.py`) construindo a HUD gráfica das notas e os atuadores modulares.
+## 🛠️ Habilidades Técnicas e Conceitos Aplicados (Portfólio)
 
-### 2. Motor Gestual Invariante e Visão da Mão Direita
-A classe avançada `GestureRecognizer` decifra o vocabulário da sua Mão Direita usando matemática Euclidiana pura. Avaliamos a distância radial do Pulso até a ponta (Tip) em contraste com o nó médio (PIP), o que nos entrega uma topologia **100% Invariante à Rotação** (perfeita para identificar dedos de ponta-cabeça na webcam).
+Este projeto foi construído para demonstrar aplicações práticas de engenharia de software e domínio de ecossistemas computacionais complexos:
 
-**🎵 O Alfabeto de Acordes (Mão Direita):**
-- 🧍‍♂️ Apenas Indicador = **Dó (C)** | 🤙 Hang Loose = **Lá (A)** | 🤙 Só o Mindinho = **Si (B)**
-- ✌️ 2, 3 e 4 Dedos = Respectivos **Ré (D), Mi (E) e Fá (F)**
-- 🤚 Mão Toda Aberta = **Sol (G)**
-- **Maiores vs Menores:** Mão apontando pro teto = Cifra Maior, Apontando para o chão = Cifra Menor.
+* **Visão Computacional Aplicada (OpenCV & MediaPipe):** Triangulação espacial em tempo real de 21 *landmarks* ósseos por mão. Renderização de interfaces gráficas interativas HUD (Heads-Up Display) reativas à física da mão do usuário cravadas a 60 FPS.
+* **Processamento Digital de Sinais (1-Euro Filter):** Implementação manual matemática do filtro de malha fechada **Zero-Latency 1-Euro** para remover o *jitter* (ruído de *bounding boxes*) inerente das predições de ML, garantindo que as leituras estroboscópicas traduzam em notas sem falso-positivos trêmulos.
+* **Multithreading Coordenado & Concorrência:** Separação violenta do loop pesado de renderização de OpenCV em paralelismo com um Motor Sequenciador Musical (Arpejador). Uso nativo da biblioteca de `threading` (*Daemon*) do Python para polifonia de notas MIDI de 136 BPM de forma assíncrona, evitando *bottlenecking* do Feed da Câmera.
+* **Engenharia de Áudio & Protocolos de Baixo Nível (CoreMIDI/RtMidi):** Interação direta com os drivers de áudio do sistema operacional e barramentos locais (MAC) para instanciar dispositivos USB virtuais via C++. Programação estrita de protocolos polifônicos hexadecimais, translações Oitavadas por Pings e automação de sliders contínuos (`MIDI CC#7`).
+* **Matemática Orientada a Geometria (Invariância Rotacional Euclidiana):** O classificador de gestos (*Engine* de Poses) foi completamente recodificado em métricas Euclidianas que avaliam as *ratios* da ponta dos dedos (*Tip*) exclusivamente em relação ao osso flexor do meio do dedo, e ao pulso. Isso quebrou totalmente a barreira de orientação padrão (*hardcoded*) típica na visão computacional (eixos X/Y do array), garantindo **100% de precisão de Hand Tracking independente da câmera** de perfil de mão virada para baixo, invertida ou em perspectiva diagonal.
 
-**Zonas Híbridas (Mão Direita):**
-- Topo Direito: **Sustenido (#)**
-- Topo Esquerdo: **Bemol (b)**
-- Metade Inferior Inteira (70%): Área de descanso ergonômico para notas **Naturais**.
+---
 
-### 3. Arpejador Multithread e Modwheel da Mão Esquerda
-A Mão Esquerda foi isolada em memória para funcionar como um maestro expressivo simultâneo.
-O núcleo do sequenciador roda protegido em uma **Thread Paralela Background**, garantindo que o delay BPM entre as notas toque sem nunca "congelar" o processamento de frames da Webcam. O Python exporta o seu áudio em **Duas Portas Virtuais** independentes (`Virtual Instrument CV` e `Virtual Instrument Arp`).
+## 🚀 Arquitetura Funcional
 
-**Controles Contínuos (Deslizamentos Virtuais no Eixo Y):**
-- 🤏 **Pinça (Indicador+Polegar):** Fader embutido na HUD mapeado para o **Volume Master** via MIDI Control Change nativo (CC#7).
-- 👍 **Mão Fechada com Polegar Aberto (Joinha):** Controla a velocidade matemática do **BPM** do metrónomo.
-- 🔫 **Arminha (Joinha + Indicador):** Controla a quantidade de notas do Arpejo *Ping-Pong* (Loop subindo e descendo pelas oitavas variando de 2 até 32 notas dinâmicas com proteção *crashproof* até a clave limite 127). Possui lógica de inércia e baixa-passagem algoritmica para suavidade.
+### 1. Classificador Acústico da Mão Direita
+A classe `GestureRecognizer` decifra o acorde base (Mão direita).
+- 🧍‍♂️ Apenas Indicador = **Dó (C)** | 🤙 Hang Loose = **Lá (A)** | 🤙 Mindinho = **Si (B)**
+- ✌️ 2, 3 e 4 Dedos = Respectivos **Ré (D), Mi (E) e Fá (F)** | 🤚 Mão Aberta = **Sol (G)**
+- **Acordes Maiores vs Menores:** Mão apontando pro teto = Menor (Pulso invertido), Apontando para o chão = Maior.
+- **Zonas Tonais Híbridas:** Levantar a mão fisicamente na seção Topo-Esquerda do monitor injeta a matemática de **Bemois (b)** ou Topo-Direita para **Sustenidos (#)**. Parte Inferior retorna notas **Naturais**.
 
-**Sequenciador e Escalas Acionadas (Esquerda Livre):**
-- 🤚 **Mão Aberta:** Alimenta a Tônica e dispara um Arpejo Sequencial do Acorde base da direita.
-- ☝️ **Só Indicador:** Engatilha Escala Menor Melódica.
-- 🤘 **Indicador+Mindinho (Rock):** Engatilha Escala Menor Natural.
+### 2. O Controlador Expressivo de Modulação Contínua (Mão Esquerda)
+A Mão Esquerda (se na tela) instaura o seu próprio painel modular. Através do rastreamento vertical, o script traduz o deslocamento de eixos Píxeis para *Modwheels* e Potenciômetros Midi no seu DAW em tempo real.
+- 🤏 **Pinça (Indicador+Polegar):** Controla o **Volume Master** via *Control Change* 7.
+- 👍 **Joinha:** Modifica a aceleração métrica da música (**BPM** do Arpejador) fluida de 60 a 240 oscilações algorítmicas por minuto.
+- 🔫 **Arminha (Joinha + Indicador):** Define o tamanho do Escopo (Array) do range Dinâmico musical. Um Filtro passa-baixas dinâmico amortece a variação entre a escala de criação de 2 a 32 notas.
 
-### 4. Componente OSD Nativo (On-Screen Display)
-- Basta levar a "Pinça" da mão esquerda até ao módulo azul na margem superior esquerda do vídeo para ativar a UI de Tutorial. Um algoritmo debouncer detecta os píxeis e projeta em runtime uma cortina escura por todo o seu vídeo, ensinando o "Manual" de uso completo do app para o usuário final sem precisar fechar e ler arquivos de texto.
+### 3. Sequenciador Tonal Assíncrono
+Gatilhos independentes de Arpejos executados de forma fantasma numa segunda porta Output injetando escalas em tempo real na raiz provida pela Mão Direita:
+- 🤚 **Mão Aberta:** Construção da Árvore Lógica *Up/Down (Ping-Pong)* baseada no arpejo fundamental.
+- ☝️ **Só Indicador:** Engatilha uma Escala Menor Melódica infinita.
+- 🤘 **Indicador+Mindinho (Rock):** Engatilha uma Escala Menor Natural.
+
+### 4. Menu Debouncer OSD Nativo (*On-Screen Display*)
+Acione dinamicamente o *Cheat Sheet*/Tutorial OSD em cima de sua Webcam ao clicar fisicamente com os dedos "Pinça" na tela dentro do Painel de Bounding Box demilitado (XY).
+
+---
 
 ## 💻 Instalação & Setup
 
-**Pré-requisitos:** MacOS (Apple Silicon) & Python 3.11+.
+**Pré-requisitos:** MacOS (Apple Silicon nativo) & Python 3.11+.
 
 ```bash
-# 1. Crie e ative o ambiente virtual para segurança
+# 1. Crie e ative o ambiente virtual para impedir dependência vazada do sistema.
 python3 -m venv venv
 source venv/bin/activate
 
-# 2. Instale todas as dependências nativas
+# 2. Instale dependências matemáticas e visuais estritas
 pip install -r requirements.txt
 
-# 3. Aperte o "Play" (Não esqueça de conceder permissão de Câmera pro Terminal!)
+# 3. Start a engine e ative a permissão nativa de Câmera da CLI no macOS!
 python src/main.py
 ```
