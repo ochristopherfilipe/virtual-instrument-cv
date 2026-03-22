@@ -7,7 +7,7 @@ import numpy as np
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from src.vision.hand_tracker import HandTracker
 from src.vision.gesture_recognizer import GestureRecognizer
-from src.audio.midi_engine import MidiEngine
+from src.audio.midi_engine import MidiEngine, Arpeggiator
 
 def main():
     print("Iniciando a captura da WebCam Sintetizador de Acordes...")
@@ -20,12 +20,18 @@ def main():
     tracker = HandTracker(max_hands=2)
     gestures = GestureRecognizer()
     midi_synth = MidiEngine()
+    arpeggiator = Arpeggiator(bpm=136) # BPM Estiloso para Eletrônica
     
     p_time = 0
+    smooth_pinch_y = -1
+    show_help = False
+    help_cooldown = 0
 
     while True:
+        if help_cooldown > 0: help_cooldown -= 1
         # Estado musical nativo se nenhuma mão válida sobrepor
         current_frame_chord = "SILÊNCIO"
+        current_frame_arp = "OFF"
         
         success, img = cap.read()
         if not success:
@@ -58,8 +64,8 @@ def main():
         cv2.line(img, (half_w, top_h), (w_img, top_h), (100, 50, 50), 3) # Linha horizontal
         cv2.line(img, (q3_w, 0), (q3_w, top_h), (100, 50, 50), 3) # Linha vertical do topo direito
         
-        # Nomes das Zonas Direitas (Acordes)
-        cv2.putText(img, "LIVRE (FUTURO)", (20, 40), cv2.FONT_HERSHEY_PLAIN, 1.5, (100, 100, 100), 2)
+        # Nomes das Zonas Direitas (Acordes) e Esquerda (Volume/Controles)
+        cv2.putText(img, "VOLUME(Pinca) BPM(Like) LEN(Arma)", (10, 40), cv2.FONT_HERSHEY_PLAIN, 1.2, (0, 255, 0), 2)
         cv2.putText(img, "BEMOL", (half_w + 10, 40), cv2.FONT_HERSHEY_PLAIN, 1.5, (0, 200, 255), 2)
         cv2.putText(img, "SUSTENIDO", (q3_w + 10, 40), cv2.FONT_HERSHEY_PLAIN, 1.5, (0, 200, 255), 2)
         cv2.putText(img, "NATURAL (ACORDES)", (half_w + 20, top_h + 40), cv2.FONT_HERSHEY_PLAIN, 1.5, (0, 200, 255), 2)
@@ -78,12 +84,79 @@ def main():
                 # Avalia a coordenada X principal da mão
                 indicador_x = lm_list[8][1]
                 
-                # Se a mão estiver na Mão Esquerda (Livre), ignorar os disparos de notas
+                # Area da Esquerda (Controles de Volume/CC)
                 if indicador_x < half_w:
-                    cv2.putText(img, "Mao Esquerda - Preparando Mapeamento", (lm_list[0][1] - 50, lm_list[0][2] - 50), cv2.FONT_HERSHEY_PLAIN, 1.2, (100, 100, 100), 2)
+                    _, _, f_up_left = gestures.analyze_hand_gesture(lm_list)
+                    soma_dedos = sum(f_up_left)
+
+                    # --- SLIDER 1: PINÇA (Volume Master) ---
+                    if gestures.is_pinching(lm_list):
+                        x_pos = lm_list[8][1]
+                        y_pos = lm_list[8][2]
+                        
+                        # Verifica Clique no botão de Ajuda
+                        if 10 < x_pos < 180 and 60 < y_pos < 100:
+                            if help_cooldown == 0:
+                                show_help = not show_help
+                                help_cooldown = 15 # debounce
+                            cv2.putText(img, "CLIQUE!", (200, 85), cv2.FONT_HERSHEY_PLAIN, 1.5, (0, 255, 255), 2)
+                            continue
+                        # Invertido: Topo da tela (0) = Máximo (127), Base (h_img) = Mudo (0)
+                        y_norm = max(0.0, min(1.0, y_pos / h_img))
+                        vol_val = int((1.0 - y_norm) * 127)
+                        midi_synth.set_volume(vol_val)
+                        
+                        # UI Fader Volume
+                        pct = int(y_norm * h_img)
+                        vol_pct = int((vol_val / 127.0) * 100)
+                        cv2.rectangle(img, (20, pct), (50, h_img), (0, 255, 0), cv2.FILLED)
+                        cv2.putText(img, f"VOLUME {vol_pct}%", (70, pct + 5), cv2.FONT_HERSHEY_DUPLEX, 1.0, (0, 255, 0), 2)
+                        
+                    # --- SLIDER 2: LIKE/JOINHA (BPM / Velocidade Arpejo) ---
+                    elif f_up_left == [True, False, False, False, False]:
+                        y_pos = lm_list[4][2] # Pegamos o polegar
+                        y_norm = max(0.0, min(1.0, y_pos / h_img))
+                        bpm_val = int((1.0 - y_norm) * 180) + 60 # 60 a 240 BPM
+                        arpeggiator.set_bpm(bpm_val)
+                        
+                        # UI Fader BPM
+                        pct = int(y_norm * h_img)
+                        cv2.rectangle(img, (20, pct), (50, h_img), (255, 255, 0), cv2.FILLED)
+                        cv2.putText(img, f"BPM: {bpm_val}", (70, pct + 5), cv2.FONT_HERSHEY_DUPLEX, 1.0, (255, 255, 0), 2)
+
+                    # --- SLIDER 3: ARMINHA / L-SHAPE (Range/Comprimento Arpejo) ---
+                    elif f_up_left == [True, True, False, False, False]:
+                        y_pos = lm_list[8][2]
+                        if smooth_pinch_y == -1: smooth_pinch_y = y_pos
+                        smooth_pinch_y = 0.9 * smooth_pinch_y + 0.1 * y_pos # Filtro Inercial
+                        
+                        y_norm = max(0.0, min(1.0, smooth_pinch_y / h_img))
+                        arp_len = int((1.0 - y_norm) * 30) + 2 # Range: 2 a 32 notas
+                        arpeggiator.set_arp_length(arp_len)
+                        
+                        # UI Fader Range
+                        pct = int(y_norm * h_img)
+                        cv2.rectangle(img, (20, pct), (50, h_img), (255, 0, 255), cv2.FILLED)
+                        cv2.putText(img, f"NOTAS: {arp_len}", (70, pct + 5), cv2.FONT_HERSHEY_DUPLEX, 1.0, (255, 0, 255), 2)
+
+                    else:
+                        smooth_pinch_y = -1 # Reseta a inércia suave
+                        
+                        # --- MODOS DE ARPEJO (Comando Sequencial) ---
+                        if soma_dedos == 5:
+                            current_frame_arp = "arpeggio"
+                            cv2.putText(img, "Arpejo: Pad Sequencial", (20, h_img - 80), cv2.FONT_HERSHEY_DUPLEX, 1.0, (255, 0, 255), 2)
+                        elif f_up_left == [False, True, False, False, False]:
+                            current_frame_arp = "melodic_minor"
+                            cv2.putText(img, "Arpejo: M. Melodica", (20, h_img - 80), cv2.FONT_HERSHEY_DUPLEX, 1.0, (255, 0, 255), 2)
+                        elif f_up_left == [False, True, False, False, True]:
+                            current_frame_arp = "natural_minor"
+                            cv2.putText(img, "Arpejo: M. Natural", (20, h_img - 80), cv2.FONT_HERSHEY_DUPLEX, 1.0, (255, 0, 255), 2)
+                        else:
+                            cv2.putText(img, "Arp: Desligado", (20, h_img - 80), cv2.FONT_HERSHEY_DUPLEX, 1.0, (100, 100, 100), 2)
                     continue
 
-                # Usar a biblioteca Gestual para entender O QUE ESSA MÃO TÁ FAZENDO
+                # ----- Mão Direita (Acordes) -----
                 base_note, chord_type, f_up = gestures.analyze_hand_gesture(lm_list)
                 
                 # Encontra o "pontinho" (landmark) mais alto de toda a mão (Menor Y na tela)
@@ -124,12 +197,50 @@ def main():
 
         # Envia tudo ao Controlador C++ MIDI para tocar o som/mudar acorde no GarageBand
         midi_synth.update(current_frame_chord)
+        
+        # Alimenta os metadados do Sequenciador da Esquerda
+        arpeggiator.set_chord_context(current_frame_chord)
+        arpeggiator.set_mode(current_frame_arp)
 
         # FPS
         c_time = time.time()
         fps = 1 / (c_time - p_time) if (c_time - p_time) > 0 else 0
         p_time = c_time
         
+        # Botão de Ajuda UI
+        btn_color = (0, 0, 255) if show_help else (100, 100, 100)
+        cv2.rectangle(img, (10, 60), (180, 100), btn_color, cv2.FILLED)
+        cv2.putText(img, "AJUDA (PINCA)", (20, 85), cv2.FONT_HERSHEY_PLAIN, 1.2, (255, 255, 255), 2)
+        
+        # Painel de Tutoriais
+        if show_help:
+            overlay_help = img.copy()
+            cv2.rectangle(overlay_help, (80, 100), (w_img-80, h_img-50), (0, 0, 0), cv2.FILLED)
+            cv2.addWeighted(overlay_help, 0.85, img, 0.15, 0, img)
+            
+            lines = [
+                "----- TUTORIAL DE GESTOS -----",
+                "",
+                "[ MAO DIREITA - Acordes ]",
+                " - Dedo Indicador: DO | Hang Loose: LA | So Mindinho: SI",
+                " - 2, 3, 4 Dedos respectivos: RE, MI, FA",
+                " - Mao Aberta: SOL",
+                " - Pulso p/ Baixo = Cifra Maior | Pulso p/ Cima = Cifra Menor",
+                " - Zonas: Topo Dir (#), Topo Esq (b), Base Inteira (Natural)",
+                "",
+                "[ MAO ESQUERDA - Arpejo e Modwheel ]",
+                " - Pinca (Indicador+Polegar) Posicao Y: Volume (Master)",
+                " - Like / Joinha Posicao Y: BPM / Velocidade Arpejo",
+                " - Arminha (Like+Indicador) Posicao Y: Qtd Notas Arpejo",
+                " - Mao Aberta (Sozinha): Liga Arpejo Sequencial",
+                " - So Indicador (Sozinho): Liga Escala Menor Melodica",
+                " - Indicador+Mindinho (Rock): Liga Escala Menor Natural"
+            ]
+            y_offset = 140
+            for line in lines:
+                cv2.putText(img, line, (100, y_offset), cv2.FONT_HERSHEY_PLAIN, 1.2, (0, 255, 0), 2)
+                y_offset += 25
+
         cv2.putText(img, f'FPS: {int(fps)}', (10, 40), cv2.FONT_HERSHEY_PLAIN, 2.0, (255, 0, 255), 2)
                     
         cv2.imshow("Instrumento Inteligente - Sintetizador de Acordes VISUAL", img)
@@ -140,6 +251,7 @@ def main():
     cap.release()
     cv2.destroyAllWindows()
     midi_synth.close()
+    arpeggiator.close()
 
 if __name__ == "__main__":
     main()

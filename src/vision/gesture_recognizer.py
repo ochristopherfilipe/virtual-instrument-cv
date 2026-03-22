@@ -99,3 +99,24 @@ class GestureRecognizer:
             return "#"
         else:
             return "b"
+
+    def is_pinching(self, lm_list):
+        """
+        Analisa a distância entre a Ponta do Dedão e a Ponta do Indicador.
+        Se eles estiverem tocando (esmagando uma 'pinça' virtual), retorna True.
+        """
+        if not lm_list or len(lm_list) < 21:
+            return False
+            
+        thumb_tip = lm_list[4]
+        index_tip = lm_list[8]
+        wrist = lm_list[0]
+        middle_mcp = lm_list[9]
+        
+        # Medimos a escala da mão inteira como referência visual
+        dist_palm = math.hypot(wrist[1] - middle_mcp[1], wrist[2] - middle_mcp[2])
+        # Medimos o "GAP" entre o indicador e o dedão
+        dist_pinch = math.hypot(thumb_tip[1] - index_tip[1], thumb_tip[2] - index_tip[2])
+        
+        # Se os dedos estiverem a 35% de proximidade em relação ao tamanho da mão inteira
+        return dist_pinch < dist_palm * 0.35
