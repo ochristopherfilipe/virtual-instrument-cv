@@ -1,39 +1,52 @@
-# 🎹 Instrumento Musical Inteligente (CV & DSP)
+# 🎹 Virtual Instrument CV (Sintetizador de Acordes Gestual)
 
-Bem-vindo ao repositório do **Instrumento Musical Inteligente**, um projeto focado em fundir Visão Computacional (CV) com Processamento Digital de Sinais (DSP) e futuramente Machine Learning para criar uma experiência musical touchless (sem toque) via Webcam.
+Um Instrumento Musical sem toque (Touchless) construído inteiramente com **Python, Visão Computacional e Processamento Digital de Sinais**. 
+Ele lê o feed de vídeo da sua Webcam através de um HUD Cyberpunk e utiliza reconhecimento isométrico dos seus dedos para deduzir **Acordes Musicais**, transmitindo os sinais instantaneamente para qualquer Sintetizador de Áudio (GarageBand, Logic, Ableton) via **Portas MIDI Virtuais**.
 
-## 🚀 Status do Projeto
+## 🚀 Arquitetura e Engenharia
 
-Neste momento, a arquitetura base do sistema foi estabelecida:
+### 1. Tracking Ósseo & OpenCV (Fase 1)
+No núcleo da captura usamos `mediapipe-silicon` (para compatibilidade nativa de Machine Learning com hardware Apple M1/M2/M3). O vídeo é escurecido e sobreposto com wireframes de neon (`src/main.py`) para desenhar a HUD das notas lidas e o monitoramento FPS.
 
-### Fase 1: Visão Computacional Robusta (Concluída ✅)
-Implementamos um núcleo de rastreamento de mãos em tempo real usando **MediaPipe (versão Apple Silicon)**.
-- **Detecção Múltipla:** Capaz de rastrear e segmentar múltiplas mãos simultaneamente com suporte a bounding boxes.
-- **Normalização Espacial Matemática:** Para garantir que a distância da câmera não influencie a "escala" musical, todas as coordenadas são divididas dinamicamente pela distância Euclidiana do Pulso ao Dedo Médio. Dessa forma, as coordenadas passam a ser relativas ao tamanho da mão, e não da tela.
+### 2. Motor Gestual e Invariância Rotacional (Fase 2)
+A classe avançada `GestureRecognizer` decifra todo o vocabulário da mão usando matemática Euclidiana pura. Em vez de testar `Y > X` (o que quebraria a câmera se a mão estivesse de ponta cabeça), calculamos as distâncias radiais do Pulso até os Nós, o que torna o nosso leitor **100% Invariante à Rotação**. O dedão se baseia no alongamento da palma para determinar tensão.
 
-### Fase 2: Digital Signal Processing (Andamento 🔄)
-A captura crua do MediaPipe sofre com o natural *Jitter* (vibrações micro-milimétricas calculadas pela IA preditiva). Como para o áudio precisamos de estabilidade 100%, desenvolvemos:
-- **Zero-Latency One Euro Filter:** Construído puramente em Python, este filtro passa-baixa adaptativo analisa a "velocidade" (derivada do movimento) da mão. Quando a mão se move rápido, a frequência de corte se ajusta para `beta` para evitar lag (atraso de rastreio). Quando a mão para, a frequência despenca e o sinal congela na tela, entregando precisão cirúrgica sem qualquer oscilação.
+**🎵 O Alfabeto de Acordes:**
+- 🧍‍♂️ Apenas Indicador = **Dó (C)**
+- ✌️ Indicador + Médio = **Ré (D)**
+- 🤟 3 Dedos = **Mi (E)**
+- 🖐️ 4 Dedos = **Fá (F)**
+- 🤚 Mão Toda Aberta = **Sol (G)**
+- 🤙 Hang Loose = **Lá (A)**
+- 🤙 Só o Mindinho = **Si (B)**
 
-## 📁 Estrutura do Código
-```text
-src/
- ├── dsp/
- │    └── filters.py       # Algoritmos Matemáticos Puros (One-Euro Filter)
- ├── vision/
- │    └── hand_tracker.py  # Wrapper Orientado à Objetos para MediaPipe (Normalização)
- └── main.py               # Application Loop e HUD Interativo (OpenCV)
-```
+**🎹 Maiores vs Menores:**
+Se sua mão apontar pro Céu (Pulso abaixo dos dedos), é Maior! Se você girar sua mão apontando pro chão, a classe injeta o modo Menor automaticamente (Ex: `Am`).
 
-## 💻 Instalação & Execução
+### 3. Zonas Espaciais Híbridas (Fase 3)
+Em vez de teclados fixos, a posição física no ar determina as propriedades sonoras:
+- O painel base domina apenas a **Metade Direita da Câmera**.
+- Ao levantar o seu dedo até os 30% superiores para a direita, engata o Acorde **Sustenido (#)**.
+- Ao levantar para a esquerda, engata o **Bemol (b)**.
+- A imensa maioria gravitacional (70% pra baixo) age como área de descanso para acordes **Naturais**. 
 
-Para rodar os testes desenvolvidos no MacOS (Apple Silicon):
+### 4. Processamento DSP e Instrumento Virtual (Fase 4)
+Nossas leituras faciais tremulas da câmera são absorvidas por um autêntico **Zero-Latency 1-Euro Filter** (`src/dsp/filters.py`) que derrete todo o tremor vibracional provido da luz ambiente, servindo um Sinal Digital 100% estável e cravado.
+
+Em seguida, o motor Musical (`src/audio/midi_engine.py`) decodifica cifras musicais `C#m` em matrizes poli-tonais de `Mido` em C++ (RtMIDI), construindo no kernel do macOS a conexão transparente "Virtual Instrument CV". Abra o seu DAW favorito, escolha o patch de um *Vintage Pad*, coloque as mãos no ar e a música acontece milissegundos depois!
+
+## 💻 Instalação & Setup
+
+**Pré-requisitos:** MacOS (Apple Silicon) & Python 3.11+.
 
 ```bash
+# 1. Crie e ative o ambiente virtual para segurança
 python3 -m venv venv
 source venv/bin/activate
+
+# 2. Instale todas as dependências nativas
 pip install -r requirements.txt
+
+# 3. Aperte o "Play" (Não esqueça de conceder permissão de Câmera pro Terminal!)
 python src/main.py
 ```
-
-*Nota: Garanta que o terminal que está rodando o Script possui as devidas permissões do macOS para acessar sua Câmera.*
