@@ -1,39 +1,43 @@
 # 🎹 Virtual Instrument CV (Sintetizador de Acordes Gestual)
 
-Um Instrumento Musical sem toque (Touchless) construído inteiramente com **Python, Visão Computacional e Processamento Digital de Sinais**. 
-Ele lê o feed de vídeo da sua Webcam através de um HUD Cyberpunk e utiliza reconhecimento isométrico dos seus dedos para deduzir **Acordes Musicais**, transmitindo os sinais instantaneamente para qualquer Sintetizador de Áudio (GarageBand, Logic, Ableton) via **Portas MIDI Virtuais**.
+Um Instrumento Musical sem toque (Touchless) construído inteiramente com **Python, Visão Computacional e Processamento Digital de Sinais (DSP)**. 
+Ele lê o feed de vídeo da sua Webcam através de um HUD Cyberpunk interativo e utiliza reconhecimento isométrico biológico para deduzir **Acordes Musicais e Modulations**, transmitindo os sinais instantaneamente para qualquer Sintetizador de Áudio (GarageBand, Logic, Ableton) via **Portas MIDI Virtuais C++**.
 
 ## 🚀 Arquitetura e Engenharia
 
-### 1. Tracking Ósseo & OpenCV (Fase 1)
-No núcleo da captura usamos `mediapipe-silicon` (para compatibilidade nativa de Machine Learning com hardware Apple M1/M2/M3). O vídeo é escurecido e sobreposto com wireframes de neon (`src/main.py`) para desenhar a HUD das notas lidas e o monitoramento FPS.
+### 1. Tracking Ósseo & OpenCV
+No núcleo da captura usamos `mediapipe-silicon` (para compatibilidade nativa de Machine Learning com hardware Apple Silicon). O vídeo base da câmera recebe um blend escurecido de sobreposição de wireframes de neon (`src/main.py`) construindo a HUD gráfica das notas e os atuadores modulares.
 
-### 2. Motor Gestual e Invariância Rotacional (Fase 2)
-A classe avançada `GestureRecognizer` decifra todo o vocabulário da mão usando matemática Euclidiana pura. Em vez de testar `Y > X` (o que quebraria a câmera se a mão estivesse de ponta cabeça), calculamos as distâncias radiais do Pulso até os Nós, o que torna o nosso leitor **100% Invariante à Rotação**. O dedão se baseia no alongamento da palma para determinar tensão.
+### 2. Motor Gestual Invariante e Visão da Mão Direita
+A classe avançada `GestureRecognizer` decifra o vocabulário da sua Mão Direita usando matemática Euclidiana pura. Avaliamos a distância radial do Pulso até a ponta (Tip) em contraste com o nó médio (PIP), o que nos entrega uma topologia **100% Invariante à Rotação** (perfeita para identificar dedos de ponta-cabeça na webcam).
 
-**🎵 O Alfabeto de Acordes:**
-- 🧍‍♂️ Apenas Indicador = **Dó (C)**
-- ✌️ Indicador + Médio = **Ré (D)**
-- 🤟 3 Dedos = **Mi (E)**
-- 🖐️ 4 Dedos = **Fá (F)**
+**🎵 O Alfabeto de Acordes (Mão Direita):**
+- 🧍‍♂️ Apenas Indicador = **Dó (C)** | 🤙 Hang Loose = **Lá (A)** | 🤙 Só o Mindinho = **Si (B)**
+- ✌️ 2, 3 e 4 Dedos = Respectivos **Ré (D), Mi (E) e Fá (F)**
 - 🤚 Mão Toda Aberta = **Sol (G)**
-- 🤙 Hang Loose = **Lá (A)**
-- 🤙 Só o Mindinho = **Si (B)**
+- **Maiores vs Menores:** Mão apontando pro teto = Cifra Maior, Apontando para o chão = Cifra Menor.
 
-**🎹 Maiores vs Menores:**
-Se sua mão apontar pro Céu (Pulso abaixo dos dedos), é Maior! Se você girar sua mão apontando pro chão, a classe injeta o modo Menor automaticamente (Ex: `Am`).
+**Zonas Híbridas (Mão Direita):**
+- Topo Direito: **Sustenido (#)**
+- Topo Esquerdo: **Bemol (b)**
+- Metade Inferior Inteira (70%): Área de descanso ergonômico para notas **Naturais**.
 
-### 3. Zonas Espaciais Híbridas (Fase 3)
-Em vez de teclados fixos, a posição física no ar determina as propriedades sonoras:
-- O painel base domina apenas a **Metade Direita da Câmera**.
-- Ao levantar o seu dedo até os 30% superiores para a direita, engata o Acorde **Sustenido (#)**.
-- Ao levantar para a esquerda, engata o **Bemol (b)**.
-- A imensa maioria gravitacional (70% pra baixo) age como área de descanso para acordes **Naturais**. 
+### 3. Arpejador Multithread e Modwheel da Mão Esquerda
+A Mão Esquerda foi isolada em memória para funcionar como um maestro expressivo simultâneo.
+O núcleo do sequenciador roda protegido em uma **Thread Paralela Background**, garantindo que o delay BPM entre as notas toque sem nunca "congelar" o processamento de frames da Webcam. O Python exporta o seu áudio em **Duas Portas Virtuais** independentes (`Virtual Instrument CV` e `Virtual Instrument Arp`).
 
-### 4. Processamento DSP e Instrumento Virtual (Fase 4)
-Nossas leituras faciais tremulas da câmera são absorvidas por um autêntico **Zero-Latency 1-Euro Filter** (`src/dsp/filters.py`) que derrete todo o tremor vibracional provido da luz ambiente, servindo um Sinal Digital 100% estável e cravado.
+**Controles Contínuos (Deslizamentos Virtuais no Eixo Y):**
+- 🤏 **Pinça (Indicador+Polegar):** Fader embutido na HUD mapeado para o **Volume Master** via MIDI Control Change nativo (CC#7).
+- 👍 **Mão Fechada com Polegar Aberto (Joinha):** Controla a velocidade matemática do **BPM** do metrónomo.
+- 🔫 **Arminha (Joinha + Indicador):** Controla a quantidade de notas do Arpejo *Ping-Pong* (Loop subindo e descendo pelas oitavas variando de 2 até 32 notas dinâmicas com proteção *crashproof* até a clave limite 127). Possui lógica de inércia e baixa-passagem algoritmica para suavidade.
 
-Em seguida, o motor Musical (`src/audio/midi_engine.py`) decodifica cifras musicais `C#m` em matrizes poli-tonais de `Mido` em C++ (RtMIDI), construindo no kernel do macOS a conexão transparente "Virtual Instrument CV". Abra o seu DAW favorito, escolha o patch de um *Vintage Pad*, coloque as mãos no ar e a música acontece milissegundos depois!
+**Sequenciador e Escalas Acionadas (Esquerda Livre):**
+- 🤚 **Mão Aberta:** Alimenta a Tônica e dispara um Arpejo Sequencial do Acorde base da direita.
+- ☝️ **Só Indicador:** Engatilha Escala Menor Melódica.
+- 🤘 **Indicador+Mindinho (Rock):** Engatilha Escala Menor Natural.
+
+### 4. Componente OSD Nativo (On-Screen Display)
+- Basta levar a "Pinça" da mão esquerda até ao módulo azul na margem superior esquerda do vídeo para ativar a UI de Tutorial. Um algoritmo debouncer detecta os píxeis e projeta em runtime uma cortina escura por todo o seu vídeo, ensinando o "Manual" de uso completo do app para o usuário final sem precisar fechar e ler arquivos de texto.
 
 ## 💻 Instalação & Setup
 
